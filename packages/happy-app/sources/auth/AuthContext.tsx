@@ -46,7 +46,7 @@ export function AuthProvider({ children, initialCredentials }: { children: React
         setIsAuthenticated(false);
         
         if (Platform.OS === 'web') {
-            window.location.reload();
+            window.location.href = '/';
         } else {
             try {
                 await Updates.reloadAsync();
