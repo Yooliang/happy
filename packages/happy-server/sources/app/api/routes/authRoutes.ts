@@ -4,8 +4,59 @@ import * as privacyKit from "privacy-kit";
 import { db } from "@/storage/db";
 import { auth } from "@/app/auth/auth";
 import { log } from "@/utils/log";
+import { createHash } from "crypto";
 
 export function authRoutes(app: Fastify) {
+
+    // ─── AD Login (username/password) ────────────────────────────
+    app.post('/v1/auth/ad', {
+        schema: {
+            body: z.object({
+                username: z.string().min(1),
+                password: z.string().min(1)
+            })
+        }
+    }, async (request, reply) => {
+        const { username, password } = request.body;
+        log({ module: 'auth-ad' }, `AD login attempt: ${username}`);
+
+        // TODO: Replace with real LDAP/AD verification
+        // For now, accept any non-empty username/password
+        const isValid = username.length > 0 && password.length > 0;
+        if (!isValid) {
+            return reply.code(401).send({ error: 'Invalid credentials' });
+        }
+
+        // Derive a deterministic publicKey from MASTER_SECRET + username
+        // This ensures the same user always maps to the same account
+        const masterSecret = process.env.HANDY_MASTER_SECRET!;
+        const publicKeyHash = createHash('sha256')
+            .update(`ad:${masterSecret}:${username}`)
+            .digest('hex');
+
+        // Upsert account using the deterministic publicKey
+        const user = await db.account.upsert({
+            where: { publicKey: publicKeyHash },
+            update: { updatedAt: new Date() },
+            create: { publicKey: publicKeyHash }
+        });
+
+        // Derive a deterministic secret for encryption
+        // Same user always gets the same secret, so they can decrypt their own data
+        const secretHash = createHash('sha256')
+            .update(`ad-secret:${masterSecret}:${username}`)
+            .digest();
+        const secret = Buffer.from(secretHash).toString("base64url");
+
+        const token = await auth.createToken(user.id);
+        log({ module: 'auth-ad' }, `AD login success: ${username} → account ${user.id}`);
+
+        return reply.send({
+            success: true,
+            token,
+            secret
+        });
+    });
     app.post('/v1/auth', {
         schema: {
             body: z.object({

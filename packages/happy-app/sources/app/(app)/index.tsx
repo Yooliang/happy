@@ -1,6 +1,6 @@
 import { RoundButton } from "@/components/RoundButton";
 import { useAuth } from "@/auth/AuthContext";
-import { Text, View, Image, Platform } from "react-native";
+import { Text, View, Image, Platform, TextInput } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as React from 'react';
 import { encodeBase64 } from "@/encryption/base64";
@@ -14,6 +14,8 @@ import { trackAccountCreated, trackAccountRestored } from '@/track';
 import { HomeHeaderNotAuth } from "@/components/HomeHeader";
 import { MainView } from "@/components/MainView";
 import { t } from '@/text';
+import { getServerUrl } from "@/sync/serverConfig";
+import axios from 'axios';
 
 export default function Home() {
     const auth = useAuth();
@@ -36,6 +38,10 @@ function NotAuthenticated() {
     const isLandscape = useIsLandscape();
     const insets = useSafeAreaInsets();
 
+    const [username, setUsername] = React.useState('');
+    const [password, setPassword] = React.useState('');
+    const [error, setError] = React.useState('');
+
     const createAccount = async () => {
         try {
             const secret = await getRandomBytesAsync(32);
@@ -48,6 +54,66 @@ function NotAuthenticated() {
             console.error('Error creating account', error);
         }
     }
+
+    const adLogin = async () => {
+        setError('');
+        if (!username.trim() || !password.trim()) {
+            setError('Please enter username and password');
+            return;
+        }
+        try {
+            const serverUrl = getServerUrl();
+            const response = await axios.post(`${serverUrl}/v1/auth/ad`, {
+                username: username.trim(),
+                password: password.trim()
+            });
+            const { token, secret } = response.data;
+            if (token && secret) {
+                try {
+                    await auth.login(token, secret);
+                    trackAccountCreated();
+                } catch (loginError: any) {
+                    console.error('Sync init error:', loginError);
+                    setError('Sync init failed: ' + (loginError?.message || String(loginError)));
+                }
+            }
+        } catch (e: any) {
+            console.error('AD login error', e);
+            setError(e?.response?.data?.error || e?.message || 'Login failed');
+        }
+    }
+
+    const isWeb = Platform.OS !== 'android' && Platform.OS !== 'ios';
+
+    const adLoginForm = (
+        <View style={styles.adFormContainer}>
+            <TextInput
+                style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border }]}
+                placeholder="Username"
+                placeholderTextColor={theme.colors.textSecondary}
+                value={username}
+                onChangeText={setUsername}
+                autoCapitalize="none"
+                autoCorrect={false}
+            />
+            <TextInput
+                style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border }]}
+                placeholder="Password"
+                placeholderTextColor={theme.colors.textSecondary}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                onSubmitEditing={adLogin}
+            />
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            <View style={styles.buttonContainer}>
+                <RoundButton
+                    title="Login"
+                    action={adLogin}
+                />
+            </View>
+        </View>
+    );
 
     const portraitLayout = (
         <View style={styles.portraitContainer}>
@@ -62,25 +128,9 @@ function NotAuthenticated() {
             <Text style={styles.subtitle}>
                 {t('welcome.subtitle')}
             </Text>
-            {Platform.OS !== 'android' && Platform.OS !== 'ios' ? (
+            {isWeb ? (
                 <>
-                    <View style={styles.buttonContainer}>
-                        <RoundButton
-                            title={t('welcome.loginWithMobileApp')}
-                            onPress={() => {
-                                trackAccountRestored();
-                                router.push('/restore');
-                            }}
-                        />
-                    </View>
-                    <View style={styles.buttonContainerSecondary}>
-                        <RoundButton
-                            size="normal"
-                            title={t('welcome.createAccount')}
-                            action={createAccount}
-                            display="inverted"
-                        />
-                    </View>
+                    {adLoginForm}
                 </>
             ) : (
                 <>
@@ -123,26 +173,8 @@ function NotAuthenticated() {
                     <Text style={styles.landscapeSubtitle}>
                         {t('welcome.subtitle')}
                     </Text>
-                    {Platform.OS !== 'android' && Platform.OS !== 'ios'
-                        ? (<>
-                            <View style={styles.landscapeButtonContainer}>
-                                <RoundButton
-                                    title={t('welcome.loginWithMobileApp')}
-                                    onPress={() => {
-                                        trackAccountRestored();
-                                        router.push('/restore');
-                                    }}
-                                />
-                            </View>
-                            <View style={styles.landscapeButtonContainerSecondary}>
-                                <RoundButton
-                                    size="normal"
-                                    title={t('welcome.createAccount')}
-                                    action={createAccount}
-                                    display="inverted"
-                                />
-                            </View>
-                        </>)
+                    {isWeb
+                        ? adLoginForm
                         : (<>
                             <View style={styles.landscapeButtonContainer}>
                                 <RoundButton
@@ -260,5 +292,28 @@ const styles = StyleSheet.create((theme) => ({
     },
     landscapeButtonContainerSecondary: {
         width: 280,
+    },
+    // AD Login form styles
+    adFormContainer: {
+        width: '100%',
+        maxWidth: 320,
+        alignItems: 'center',
+    },
+    input: {
+        width: '100%',
+        height: 44,
+        borderWidth: 1,
+        borderRadius: 8,
+        paddingHorizontal: 12,
+        marginBottom: 12,
+        fontSize: 16,
+        ...Typography.default(),
+    },
+    errorText: {
+        color: '#e53935',
+        fontSize: 14,
+        marginBottom: 8,
+        textAlign: 'center',
+        ...Typography.default(),
     },
 }));

@@ -2271,7 +2271,12 @@ export async function syncCreate(credentials: AuthCredentials) {
         return;
     }
     isInitialized = true;
-    await syncInit(credentials, false);
+    try {
+        await syncInit(credentials, false);
+    } catch (error) {
+        isInitialized = false;
+        throw error;
+    }
 }
 
 export async function syncRestore(credentials: AuthCredentials) {
@@ -2280,7 +2285,12 @@ export async function syncRestore(credentials: AuthCredentials) {
         return;
     }
     isInitialized = true;
-    await syncInit(credentials, true);
+    try {
+        await syncInit(credentials, true);
+    } catch (error) {
+        isInitialized = false;
+        throw error;
+    }
 }
 
 async function syncInit(credentials: AuthCredentials, restore: boolean) {
