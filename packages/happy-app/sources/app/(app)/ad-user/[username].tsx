@@ -5,7 +5,7 @@ import { useAllMachines, useIsDataReady, useAllSessions, storage } from '@/sync/
 import { machineSpawnNewSession, sessionDelete } from '@/sync/ops';
 import { sync } from '@/sync/sync';
 import { isMachineOnline } from '@/utils/machineUtils';
-import { getSessionName, useSessionStatus, getSessionSubtitle } from '@/utils/sessionUtils';
+import { getSessionName, useSessionStatus } from '@/utils/sessionUtils';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { Typography } from '@/constants/Typography';
 import { useAuth } from '@/auth/AuthContext';
@@ -258,11 +258,27 @@ export default React.memo(function AdUserPage() {
     );
 });
 
+function formatRelativeTime(timestamp: number): string {
+    const now = Date.now();
+    const diff = now - timestamp;
+    if (diff < 0) return '剛剛';
+    const seconds = Math.floor(diff / 1000);
+    if (seconds < 60) return '剛剛';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes} 分鐘前`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} 小時前`;
+    const days = Math.floor(hours / 24);
+    if (days < 30) return `${days} 天前`;
+    const months = Math.floor(days / 30);
+    return `${months} 個月前`;
+}
+
 const SessionItem = React.memo(({ session, onPress, onDelete, isLast }: { session: Session; onPress: () => void; onDelete: () => void; isLast?: boolean }) => {
     const { theme } = useUnistyles();
     const status = useSessionStatus(session);
     const name = getSessionName(session);
-    const subtitle = getSessionSubtitle(session);
+    const subtitle = formatRelativeTime(session.activeAt || session.updatedAt);
 
     return (
         <Pressable
