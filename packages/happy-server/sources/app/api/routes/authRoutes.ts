@@ -118,7 +118,10 @@ export function authRoutes(app: Fastify) {
         try {
             const nasCredKey = deriveNasCredKey(masterSecret, normalizedUsername);
             const decryptedPassword = decryptNasPassword(Buffer.from(kv.value), nasCredKey);
-            return reply.send({ username: normalizedUsername, password: decryptedPassword });
+            // Return domain-qualified username for Synology NAS (GS-AD\username)
+            const ldapNetbios = process.env.LDAP_NETBIOS || 'GS-AD';
+            const nasUsername = `${ldapNetbios}\\${normalizedUsername}`;
+            return reply.send({ username: nasUsername, password: decryptedPassword });
         } catch (e: any) {
             log({ module: 'auth-ad' }, `Failed to decrypt NAS credentials for ${normalizedUsername}: ${e?.message}`);
             return reply.code(500).send({ error: 'Failed to decrypt credentials' });
