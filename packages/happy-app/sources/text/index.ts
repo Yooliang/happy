@@ -128,8 +128,8 @@ if (!found) {
                     break;
                 }
 
-                currentLanguage = 'zh-Hans';
-                console.log(`[i18n] Falling back to simplified Chinese: zh-Hans`);
+                currentLanguage = 'zh-Hant';
+                console.log(`[i18n] Falling back to traditional Chinese: zh-Hant`);
                 break;
             }
 

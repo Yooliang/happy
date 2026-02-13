@@ -697,8 +697,8 @@ export const zhHant: TranslationStructure = {
 
     welcome: {
         // Main welcome screen for unauthenticated users
-        title: 'Codex 和 Claude Code 行動用戶端',
-        subtitle: '端對端加密，您的帳戶僅儲存在您的裝置上。',
+        title: 'AI 智慧檔案搜尋系統',
+        subtitle: '使用 AD 帳號登入，即可透過 AI 搜尋與管理 NAS 檔案。',
         createAccount: '建立帳戶',
         linkOrRestoreAccount: '連結或恢復帳戶',
         loginWithMobileApp: '使用行動應用程式登入',

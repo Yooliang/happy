@@ -4,12 +4,15 @@ import { Drawer } from 'expo-router/drawer';
 import { useIsTablet } from '@/utils/responsive';
 import { SidebarView } from './SidebarView';
 import { Slot } from 'expo-router';
-import { useWindowDimensions } from 'react-native';
+import { Platform, useWindowDimensions } from 'react-native';
 
 export const SidebarNavigator = React.memo(() => {
     const auth = useAuth();
     const isTablet = useIsTablet();
-    const showPermanentDrawer = auth.isAuthenticated && isTablet;
+    const isAdUser = Platform.OS === 'web' && (() => {
+        try { return !!localStorage.getItem('ad-username'); } catch { return false; }
+    })();
+    const showPermanentDrawer = auth.isAuthenticated && isTablet && !isAdUser;
     const { width: windowWidth } = useWindowDimensions();
 
     // Calculate drawer width only when needed

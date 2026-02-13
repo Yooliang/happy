@@ -13,9 +13,20 @@ import { Typography } from "@/constants/Typography";
 import { trackAccountCreated, trackAccountRestored } from '@/track';
 import { HomeHeaderNotAuth } from "@/components/HomeHeader";
 import { MainView } from "@/components/MainView";
+import { CompanyHeader } from "@/components/CompanyHeader";
 import { t } from '@/text';
 import { getServerUrl } from "@/sync/serverConfig";
 import axios from 'axios';
+
+// Module-level AD username, set during adLogin, read in Authenticated
+let pendingAdUsername: string | null = null;
+
+function getStoredAdUsername(): string | null {
+    if (Platform.OS === 'web') {
+        try { return localStorage.getItem('ad-username'); } catch {}
+    }
+    return null;
+}
 
 export default function Home() {
     const auth = useAuth();
@@ -28,6 +39,20 @@ export default function Home() {
 }
 
 function Authenticated() {
+    const router = useRouter();
+
+    React.useEffect(() => {
+        const adUser = pendingAdUsername || getStoredAdUsername();
+        if (adUser) {
+            pendingAdUsername = null;
+            router.replace(`/ad-user/${adUser}` as any);
+        }
+    }, []);
+
+    // If AD user, show nothing while redirect fires
+    if (pendingAdUsername || getStoredAdUsername()) {
+        return null;
+    }
     return <MainView variant="phone" />;
 }
 
@@ -69,10 +94,22 @@ function NotAuthenticated() {
             });
             const { token, secret } = response.data;
             if (token && secret) {
+                // Store AD username for redirect after auth
+                const cleanName = username.trim().includes('\\')
+                    ? username.trim().split('\\').pop()!
+                    : username.trim();
+                pendingAdUsername = cleanName;
+                if (Platform.OS === 'web') {
+                    try { localStorage.setItem('ad-username', cleanName); } catch {}
+                }
                 try {
                     await auth.login(token, secret);
                     trackAccountCreated();
                 } catch (loginError: any) {
+                    pendingAdUsername = null;
+                    if (Platform.OS === 'web') {
+                        try { localStorage.removeItem('ad-username'); } catch {}
+                    }
                     console.error('Sync init error:', loginError);
                     setError('Sync init failed: ' + (loginError?.message || String(loginError)));
                 }
@@ -117,11 +154,13 @@ function NotAuthenticated() {
 
     const portraitLayout = (
         <View style={styles.portraitContainer}>
-            <Image
-                source={theme.dark ? require('@/assets/images/logotype-light.png') : require('@/assets/images/logotype-dark.png')}
-                resizeMode="contain"
-                style={styles.logo}
-            />
+            <View style={styles.mascotWrapper}>
+                <Image
+                    source={require('@/assets/images/happy-nas.webp')}
+                    resizeMode="contain"
+                    style={styles.mascot}
+                />
+            </View>
             <Text style={styles.title}>
                 {t('welcome.title')}
             </Text>
@@ -160,11 +199,13 @@ function NotAuthenticated() {
         <View style={[styles.landscapeContainer, { paddingBottom: insets.bottom + 24 }]}>
             <View style={styles.landscapeInner}>
                 <View style={styles.landscapeLogoSection}>
-                    <Image
-                        source={theme.dark ? require('@/assets/images/logotype-light.png') : require('@/assets/images/logotype-dark.png')}
-                        resizeMode="contain"
-                        style={styles.logo}
-                    />
+                    <View style={styles.mascotWrapper}>
+                        <Image
+                            source={require('@/assets/images/happy-nas.webp')}
+                            resizeMode="contain"
+                            style={{ width: 200, height: 200 }}
+                        />
+                    </View>
                 </View>
                 <View style={styles.landscapeContentSection}>
                     <Text style={styles.landscapeTitle}>
@@ -201,10 +242,14 @@ function NotAuthenticated() {
     );
 
     return (
-        <>
-            <HomeHeaderNotAuth />
-            {isLandscape ? landscapeLayout : portraitLayout}
-        </>
+        <View style={{ flex: 1, backgroundColor: '#1a1a2e' }}>
+            <View style={{ paddingTop: insets.top }}>
+                <CompanyHeader />
+            </View>
+            <View style={{ flex: 1, backgroundColor: theme.colors.groupped.background }}>
+                {isLandscape ? landscapeLayout : portraitLayout}
+            </View>
+        </View>
     )
 }
 
@@ -215,12 +260,21 @@ const styles = StyleSheet.create((theme) => ({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    logo: {
-        width: 300,
-        height: 90,
+    mascotWrapper: {
+        marginBottom: 8,
+        borderRadius: 25,
+        overflow: 'hidden' as const,
+        // @ts-ignore - Web CSS mask for feathered edges
+        maskImage: 'radial-gradient(ellipse 80% 80% at center, black 50%, transparent 100%)',
+        WebkitMaskImage: 'radial-gradient(ellipse 80% 80% at center, black 50%, transparent 100%)',
+    } as any,
+    mascot: {
+        width: 220,
+        height: 220,
+        borderRadius: 25,
     },
     title: {
-        marginTop: 16,
+        marginTop: 8,
         textAlign: 'center',
         fontSize: 24,
         ...Typography.default('semiBold'),

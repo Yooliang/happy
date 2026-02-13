@@ -62,6 +62,12 @@ export default function RootLayout() {
                 }}
             />
             <Stack.Screen
+                name="ad-user/[username]"
+                options={{
+                    headerShown: false,
+                }}
+            />
+            <Stack.Screen
                 name="session/[id]"
                 options={{
                     headerShown: false

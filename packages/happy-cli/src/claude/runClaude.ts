@@ -467,7 +467,12 @@ export async function runClaude(credentials: Credentials, options: StartOptions 
             'happy': {
                 type: 'http' as const,
                 url: happyServer.url,
-            }
+            },
+            'nas': {
+                command: 'npx',
+                args: ['tsx', '/home/gsgdx/HappyNAS/packages/happy-nas/src/mcp/nasMcpStdio.ts'],
+                cwd: '/home/gsgdx/HappyNAS/packages/happy-nas',
+            },
         },
         session,
         claudeEnvVars: options.claudeEnvVars,

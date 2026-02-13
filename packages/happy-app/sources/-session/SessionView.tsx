@@ -30,7 +30,7 @@ import { ActivityIndicator, Platform, Pressable, Text, View } from 'react-native
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUnistyles } from 'react-native-unistyles';
 
-export const SessionView = React.memo((props: { id: string }) => {
+export const SessionView = React.memo((props: { id: string; extraTopPadding?: number }) => {
     const sessionId = props.id;
     const router = useRouter();
     const session = useSession(sessionId);
@@ -126,7 +126,7 @@ export const SessionView = React.memo((props: { id: string }) => {
             )}
 
             {/* Content based on state */}
-            <View style={{ flex: 1, paddingTop: !(isLandscape && deviceType === 'phone' && Platform.OS !== 'web') ? safeArea.top + headerHeight + (!isTablet && realtimeStatus !== 'disconnected' ? 48 : 0) : 0 }}>
+            <View style={{ flex: 1, paddingTop: !(isLandscape && deviceType === 'phone' && Platform.OS !== 'web') ? safeArea.top + headerHeight + (props.extraTopPadding || 0) + (!isTablet && realtimeStatus !== 'disconnected' ? 48 : 0) : 0 }}>
                 {!isDataReady ? (
                     // Loading state
                     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
