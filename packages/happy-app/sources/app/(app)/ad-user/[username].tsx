@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { kvGet, kvSet } from '@/sync/apiKv';
 import { encodeBase64, decodeBase64 } from '@/encryption/base64';
+import { getServerUrl } from '@/sync/serverConfig';
 
 /**
  * AD User session page.
@@ -136,6 +137,28 @@ export default React.memo(function AdUserPage() {
         setError(null);
 
         try {
+            // Fetch per-user NAS credentials from server
+            let nasEnvVars: Record<string, string> | undefined;
+            const credentials = sync.getCredentials();
+            if (credentials) {
+                try {
+                    const serverUrl = getServerUrl();
+                    const resp = await fetch(
+                        `${serverUrl}/v1/auth/ad/nas-credentials?username=${encodeURIComponent(username)}`,
+                        { headers: { 'Authorization': `Bearer ${credentials.token}` } }
+                    );
+                    if (resp.ok) {
+                        const nasCred = await resp.json();
+                        nasEnvVars = {
+                            SYNO_AD_USERNAME: nasCred.username,
+                            SYNO_AD_PASSWORD: nasCred.password,
+                        };
+                    }
+                } catch (e) {
+                    console.warn('Failed to fetch NAS credentials, falling back to service account:', e);
+                }
+            }
+
             // Per-user directory isolation
             const baseDir = onlineMachine.metadata?.homeDir || '/home';
             const directory = `${baseDir}/nas-users/${username}`;
@@ -144,6 +167,7 @@ export default React.memo(function AdUserPage() {
                 directory,
                 agent: 'claude',
                 approvedNewDirectoryCreation: true,
+                environmentVariables: nasEnvVars,
             });
 
             if (result.type === 'success' && result.sessionId) {

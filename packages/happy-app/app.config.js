@@ -1,8 +1,8 @@
 const variant = process.env.APP_ENV || 'development';
 const name = {
-    development: "Happy (dev)",
-    preview: "Happy (preview)",
-    production: "Happy"
+    development: "牧陽能控 HappyNAS",
+    preview: "牧陽能控 HappyNAS",
+    production: "牧陽能控 HappyNAS"
 }[variant];
 const bundleId = {
     development: "com.slopus.happy.dev",

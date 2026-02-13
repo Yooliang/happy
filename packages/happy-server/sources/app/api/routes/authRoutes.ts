@@ -4,8 +4,30 @@ import * as privacyKit from "privacy-kit";
 import { db } from "@/storage/db";
 import { auth } from "@/app/auth/auth";
 import { log } from "@/utils/log";
-import { createHash } from "crypto";
+import { createHash, createCipheriv, createDecipheriv, randomBytes } from "crypto";
 import { authenticate as ldapAuthenticate, cleanUsername as ldapCleanUsername } from "@/modules/ldap";
+
+// ─── NAS credential encryption helpers ─────────────────────
+function deriveNasCredKey(masterSecret: string, username: string): Buffer {
+    return createHash('sha256').update(`nas-cred-key:${masterSecret}:${username}`).digest();
+}
+
+function encryptNasPassword(password: string, key: Buffer): Buffer {
+    const iv = randomBytes(12);
+    const cipher = createCipheriv('aes-256-gcm', key, iv);
+    const encrypted = Buffer.concat([cipher.update(password, 'utf8'), cipher.final()]);
+    const tag = cipher.getAuthTag();
+    return Buffer.concat([iv, tag, encrypted]); // 12 + 16 + N bytes
+}
+
+function decryptNasPassword(data: Buffer, key: Buffer): string {
+    const iv = data.subarray(0, 12);
+    const tag = data.subarray(12, 28);
+    const encrypted = data.subarray(28);
+    const decipher = createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(tag);
+    return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
+}
 
 export function authRoutes(app: Fastify) {
 
@@ -49,6 +71,20 @@ export function authRoutes(app: Fastify) {
             .digest();
         const secret = Buffer.from(secretHash).toString("base64url");
 
+        // Store encrypted NAS credentials for per-user NAS access
+        try {
+            const nasCredKey = deriveNasCredKey(masterSecret, normalizedUsername);
+            const encryptedPassword = encryptNasPassword(password, nasCredKey);
+            await db.userKVStore.upsert({
+                where: { accountId_key: { accountId: user.id, key: 'nas-credentials' } },
+                update: { value: encryptedPassword },
+                create: { accountId: user.id, key: 'nas-credentials', value: encryptedPassword },
+            });
+            log({ module: 'auth-ad' }, `NAS credentials stored for ${normalizedUsername}`);
+        } catch (e: any) {
+            log({ module: 'auth-ad' }, `Failed to store NAS credentials: ${e?.message}`);
+        }
+
         const token = await auth.createToken(user.id);
         log({ module: 'auth-ad' }, `AD login success: ${normalizedUsername} → account ${user.id}`);
 
@@ -58,6 +94,37 @@ export function authRoutes(app: Fastify) {
             secret
         });
     });
+
+    // ─── Retrieve NAS credentials for per-user access ─────────
+    app.get('/v1/auth/ad/nas-credentials', {
+        preHandler: app.authenticate,
+        schema: {
+            querystring: z.object({
+                username: z.string().min(1),
+            }),
+        }
+    }, async (request, reply) => {
+        const normalizedUsername = ldapCleanUsername(request.query.username);
+        const masterSecret = process.env.HANDY_MASTER_SECRET!;
+
+        const kv = await db.userKVStore.findUnique({
+            where: { accountId_key: { accountId: request.userId, key: 'nas-credentials' } },
+        });
+
+        if (!kv || !kv.value) {
+            return reply.code(404).send({ error: 'No NAS credentials found. Please log in again.' });
+        }
+
+        try {
+            const nasCredKey = deriveNasCredKey(masterSecret, normalizedUsername);
+            const decryptedPassword = decryptNasPassword(Buffer.from(kv.value), nasCredKey);
+            return reply.send({ username: normalizedUsername, password: decryptedPassword });
+        } catch (e: any) {
+            log({ module: 'auth-ad' }, `Failed to decrypt NAS credentials for ${normalizedUsername}: ${e?.message}`);
+            return reply.code(500).send({ error: 'Failed to decrypt credentials' });
+        }
+    });
+
     app.post('/v1/auth', {
         schema: {
             body: z.object({
